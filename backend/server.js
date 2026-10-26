@@ -49,12 +49,43 @@ app.get("/api/test", (req, res) => {
 // ===============================
 
 app.post("/api/register", async (req, res) => {
-  const { name, email, password } = req.body;
+  let { name, email, password } = req.body;
 
+  // Required fields
   if (!name || !email || !password) {
     return res.status(400).json({
       success: false,
       message: "All fields are required.",
+    });
+  }
+
+  // Clean input
+  name = name.trim();
+  email = email.trim().toLowerCase();
+
+  // Name validation
+  if (name.length < 2) {
+    return res.status(400).json({
+      success: false,
+      message: "Name must be at least 2 characters.",
+    });
+  }
+
+  // Email validation
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!emailPattern.test(email)) {
+    return res.status(400).json({
+      success: false,
+      message: "Please enter a valid email address.",
+    });
+  }
+
+  // Password validation
+  if (password.length < 6) {
+    return res.status(400).json({
+      success: false,
+      message: "Password must be at least 6 characters.",
     });
   }
 
@@ -71,6 +102,7 @@ app.post("/api/register", async (req, res) => {
         });
       }
 
+      // Existing email
       if (results.length > 0) {
         return res.status(409).json({
           success: false,
@@ -78,34 +110,44 @@ app.post("/api/register", async (req, res) => {
         });
       }
 
-      const hashedPassword = await bcrypt.hash(password, 10);
+      try {
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-      const insertSql = `
-        INSERT INTO users
-        (name, email, password)
-        VALUES (?, ?, ?)
-      `;
+        const insertSql = `
+          INSERT INTO users
+          (name, email, password)
+          VALUES (?, ?, ?)
+        `;
 
-      db.query(insertSql, [name, email, hashedPassword], (err, result) => {
-        if (err) {
-          console.error("MySQL Register Error:", err);
+        db.query(insertSql, [name, email, hashedPassword], (err, result) => {
+          if (err) {
+            console.error("MySQL Register Error:", err);
 
-          return res.status(500).json({
-            success: false,
-            message: "Failed to create account.",
+            return res.status(500).json({
+              success: false,
+              message: "Failed to create account.",
+            });
+          }
+
+          res.status(201).json({
+            success: true,
+            message: "Account created successfully!",
+            user: {
+              id: result.insertId,
+              name,
+              email,
+            },
           });
-        }
-
-        res.status(201).json({
-          success: true,
-          message: "Account created successfully!",
-          user: {
-            id: result.insertId,
-            name,
-            email,
-          },
         });
-      });
+      } catch (error) {
+        console.error("Password Hash Error:", error);
+
+        return res.status(500).json({
+          success: false,
+          message: "Failed to secure password.",
+        });
+      }
     });
   } catch (error) {
     console.error("Register Error:", error);
@@ -122,12 +164,24 @@ app.post("/api/register", async (req, res) => {
 // ===============================
 
 app.post("/api/login", (req, res) => {
-  const { email, password } = req.body;
+  let { email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({
       success: false,
       message: "Email and password are required.",
+    });
+  }
+
+  email = email.trim().toLowerCase();
+
+  // Email validation
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!emailPattern.test(email)) {
+    return res.status(400).json({
+      success: false,
+      message: "Please enter a valid email address.",
     });
   }
 
@@ -205,7 +259,6 @@ app.post("/api/login", (req, res) => {
 // ===============================
 
 app.get("/api/applications", authenticateToken, (req, res) => {
-  // User ID comes from JWT
   const userId = req.user.id;
 
   const sql = `
@@ -234,7 +287,7 @@ app.get("/api/applications", authenticateToken, (req, res) => {
 // ===============================
 
 app.post("/api/applications", authenticateToken, (req, res) => {
-  const { company, position, date, status } = req.body;
+  let { company, position, date, status } = req.body;
 
   if (!company || !position || !date || !status) {
     return res.status(400).json({
@@ -243,7 +296,17 @@ app.post("/api/applications", authenticateToken, (req, res) => {
     });
   }
 
-  // User ID comes from JWT
+  company = company.trim();
+  position = position.trim();
+  status = status.trim();
+
+  if (!company || !position || !date || !status) {
+    return res.status(400).json({
+      success: false,
+      message: "All fields are required.",
+    });
+  }
+
   const userId = req.user.id;
 
   const sql = `
@@ -285,7 +348,7 @@ app.post("/api/applications", authenticateToken, (req, res) => {
 app.put("/api/applications/:id", authenticateToken, (req, res) => {
   const { id } = req.params;
 
-  const { company, position, date, status } = req.body;
+  let { company, position, date, status } = req.body;
 
   if (!company || !position || !date || !status) {
     return res.status(400).json({
@@ -294,7 +357,17 @@ app.put("/api/applications/:id", authenticateToken, (req, res) => {
     });
   }
 
-  // User ID comes from JWT
+  company = company.trim();
+  position = position.trim();
+  status = status.trim();
+
+  if (!company || !position || !date || !status) {
+    return res.status(400).json({
+      success: false,
+      message: "All fields are required.",
+    });
+  }
+
   const userId = req.user.id;
 
   const sql = `
@@ -344,7 +417,6 @@ app.put("/api/applications/:id", authenticateToken, (req, res) => {
 app.delete("/api/applications/:id", authenticateToken, (req, res) => {
   const { id } = req.params;
 
-  // User ID comes from JWT
   const userId = req.user.id;
 
   const sql = `

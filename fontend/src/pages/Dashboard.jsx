@@ -5,6 +5,7 @@ function Dashboard() {
   const navigate = useNavigate();
 
   const [applications, setApplications] = useState([]);
+  const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
@@ -12,6 +13,7 @@ function Dashboard() {
   const [position, setPosition] = useState("");
   const [date, setDate] = useState("");
   const [status, setStatus] = useState("Applied");
+  const [saving, setSaving] = useState(false);
 
   // ===============================
   // GET LOGGED-IN USER
@@ -50,6 +52,8 @@ function Dashboard() {
   // ===============================
 
   useEffect(() => {
+    setError("");
+
     if (!savedUser || !savedUser.id || !token) {
       navigate("/login");
       return;
@@ -64,8 +68,10 @@ function Dashboard() {
       }
     )
       .then((response) => {
-
-        if (response.status === 401 || response.status === 403) {
+        if (
+          response.status === 401 ||
+          response.status === 403
+        ) {
           localStorage.removeItem("jobtrackToken");
           localStorage.removeItem("jobtrackLoggedIn");
           localStorage.removeItem("jobtrackUser");
@@ -84,24 +90,32 @@ function Dashboard() {
         return response.json();
       })
       .then((data) => {
-
         if (Array.isArray(data)) {
           setApplications(data);
+          setError("");
         } else {
           console.error(
             "Invalid applications data:",
             data
           );
-        }
 
+          setError(
+            "Could not load your applications. Please try again."
+          );
+        }
       })
       .catch((error) => {
         console.error(
           "Failed to load applications:",
           error
         );
-      });
 
+        if (error.message !== "Session expired.") {
+          setError(
+            "Could not load your applications. Please check your backend connection and try again."
+          );
+        }
+      });
   }, [navigate, savedUser?.id, token]);
 
   // ===============================
@@ -109,12 +123,79 @@ function Dashboard() {
   // ===============================
 
   const handleLogout = () => {
-
     localStorage.removeItem("jobtrackLoggedIn");
     localStorage.removeItem("jobtrackUser");
     localStorage.removeItem("jobtrackToken");
 
     navigate("/login");
+  };
+
+  // ===============================
+  // APPLICATION VALIDATION
+  // ===============================
+
+  const validateApplication = () => {
+    const cleanCompany = company.trim();
+    const cleanPosition = position.trim();
+
+    // Required fields
+    if (!cleanCompany || !cleanPosition || !date) {
+      alert("Please fill in all fields.");
+      return false;
+    }
+
+    // Company validation
+    if (cleanCompany.length < 2) {
+      alert(
+        "Company name must be at least 2 characters."
+      );
+      return false;
+    }
+
+    // Position validation
+    if (cleanPosition.length < 2) {
+      alert(
+        "Job position must be at least 2 characters."
+      );
+      return false;
+    }
+
+    // Date validation
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const selectedDate = new Date(
+      `${date}T00:00:00`
+    );
+
+    if (isNaN(selectedDate.getTime())) {
+      alert("Please enter a valid application date.");
+      return false;
+    }
+
+    if (selectedDate > today) {
+      alert(
+        "Application date cannot be in the future."
+      );
+      return false;
+    }
+
+    // Status validation
+    const validStatuses = [
+      "Applied",
+      "Interview",
+      "Offer",
+      "Rejected",
+    ];
+
+    if (!validStatuses.includes(status)) {
+      alert(
+        "Please select a valid application status."
+      );
+      return false;
+    }
+
+    return true;
   };
 
   // ===============================
@@ -124,8 +205,11 @@ function Dashboard() {
   const handleAddApplication = async (e) => {
     e.preventDefault();
 
-    if (!company || !position || !date) {
-      alert("Please fill in all fields.");
+    if (!validateApplication()) {
+      return;
+    }
+
+    if (saving) {
       return;
     }
 
@@ -139,6 +223,10 @@ function Dashboard() {
     }
 
     try {
+      setSaving(true);
+
+      const cleanCompany = company.trim();
+      const cleanPosition = position.trim();
 
       const response = await fetch(
         "http://localhost:5000/api/applications",
@@ -151,8 +239,8 @@ function Dashboard() {
           },
 
           body: JSON.stringify({
-            company,
-            position,
+            company: cleanCompany,
+            position: cleanPosition,
             date,
             status,
           }),
@@ -161,16 +249,19 @@ function Dashboard() {
 
       const data = await response.json();
 
-      if (response.status === 401 || response.status === 403) {
-
+      if (
+        response.status === 401 ||
+        response.status === 403
+      ) {
         localStorage.removeItem("jobtrackToken");
         localStorage.removeItem("jobtrackLoggedIn");
         localStorage.removeItem("jobtrackUser");
 
-        alert("Your session has expired. Please login again.");
+        alert(
+          "Your session has expired. Please login again."
+        );
 
         navigate("/login");
-
         return;
       }
 
@@ -194,9 +285,7 @@ function Dashboard() {
       );
 
       resetForm();
-
     } catch (error) {
-
       console.error(
         "Add Application Error:",
         error
@@ -205,6 +294,8 @@ function Dashboard() {
       alert(
         "Could not connect to backend."
       );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -213,7 +304,6 @@ function Dashboard() {
   // ===============================
 
   const handleEditApplication = (application) => {
-
     setEditingId(application.id);
 
     setCompany(
@@ -247,11 +337,13 @@ function Dashboard() {
   // ===============================
 
   const handleUpdateApplication = async (e) => {
-
     e.preventDefault();
 
-    if (!company || !position || !date) {
-      alert("Please fill in all fields.");
+    if (!validateApplication()) {
+      return;
+    }
+
+    if (saving) {
       return;
     }
 
@@ -264,17 +356,19 @@ function Dashboard() {
     }
 
     if (!savedUser || !savedUser.id || !token) {
-
       alert(
         "Your session has expired. Please login again."
       );
 
       navigate("/login");
-
       return;
     }
 
     try {
+      setSaving(true);
+
+      const cleanCompany = company.trim();
+      const cleanPosition = position.trim();
 
       const response = await fetch(
         `http://localhost:5000/api/applications/${editingId}`,
@@ -287,8 +381,8 @@ function Dashboard() {
           },
 
           body: JSON.stringify({
-            company,
-            position,
+            company: cleanCompany,
+            position: cleanPosition,
             date,
             status,
           }),
@@ -297,21 +391,23 @@ function Dashboard() {
 
       const data = await response.json();
 
-      if (response.status === 401 || response.status === 403) {
-
+      if (
+        response.status === 401 ||
+        response.status === 403
+      ) {
         localStorage.removeItem("jobtrackToken");
         localStorage.removeItem("jobtrackLoggedIn");
         localStorage.removeItem("jobtrackUser");
 
-        alert("Your session has expired. Please login again.");
+        alert(
+          "Your session has expired. Please login again."
+        );
 
         navigate("/login");
-
         return;
       }
 
       if (!response.ok) {
-
         alert(
           data.message ||
             "Failed to update application."
@@ -326,8 +422,8 @@ function Dashboard() {
             application.id === editingId
               ? {
                   ...application,
-                  company,
-                  position,
+                  company: cleanCompany,
+                  position: cleanPosition,
                   date_applied: date,
                   status,
                 }
@@ -341,9 +437,7 @@ function Dashboard() {
       );
 
       resetForm();
-
     } catch (error) {
-
       console.error(
         "Update Application Error:",
         error
@@ -352,6 +446,8 @@ function Dashboard() {
       alert(
         "Could not connect to backend."
       );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -360,7 +456,6 @@ function Dashboard() {
   // ===============================
 
   const handleDeleteApplication = async (id) => {
-
     const confirmed = window.confirm(
       "Are you sure you want to delete this application?"
     );
@@ -370,25 +465,21 @@ function Dashboard() {
     }
 
     if (!savedUser || !savedUser.id || !token) {
-
       alert(
         "Your session has expired. Please login again."
       );
 
       navigate("/login");
-
       return;
     }
 
     try {
-
       const response = await fetch(
         `http://localhost:5000/api/applications/${id}`,
         {
           method: "DELETE",
 
           headers: {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
         }
@@ -396,21 +487,23 @@ function Dashboard() {
 
       const data = await response.json();
 
-      if (response.status === 401 || response.status === 403) {
-
+      if (
+        response.status === 401 ||
+        response.status === 403
+      ) {
         localStorage.removeItem("jobtrackToken");
         localStorage.removeItem("jobtrackLoggedIn");
         localStorage.removeItem("jobtrackUser");
 
-        alert("Your session has expired. Please login again.");
+        alert(
+          "Your session has expired. Please login again."
+        );
 
         navigate("/login");
-
         return;
       }
 
       if (!response.ok) {
-
         alert(
           data.message ||
             "Failed to delete application."
@@ -430,9 +523,7 @@ function Dashboard() {
         "Application deleted from MySQL:",
         id
       );
-
     } catch (error) {
-
       console.error(
         "Delete Application Error:",
         error
@@ -449,13 +540,13 @@ function Dashboard() {
   // ===============================
 
   const resetForm = () => {
-
     setCompany("");
     setPosition("");
     setDate("");
     setStatus("Applied");
     setEditingId(null);
     setShowForm(false);
+    setSaving(false);
   };
 
   // ===============================
@@ -463,7 +554,6 @@ function Dashboard() {
   // ===============================
 
   const formatDate = (dateValue) => {
-
     if (!dateValue) {
       return "";
     }
@@ -488,14 +578,17 @@ function Dashboard() {
     <div className="dashboard">
 
       {/* SIDEBAR */}
+
       <aside className="sidebar">
 
         <div className="dashboard-logo">
+
           <span className="logo-icon">
             J
           </span>
 
           JobTrack
+
         </div>
 
         <nav className="sidebar-nav">
@@ -546,9 +639,11 @@ function Dashboard() {
 
 
       {/* MAIN CONTENT */}
+
       <main className="dashboard-main">
 
         {/* HEADER */}
+
         <header className="dashboard-header">
 
           <div>
@@ -562,7 +657,6 @@ function Dashboard() {
             </p>
 
           </div>
-
 
           <div className="user-profile">
 
@@ -594,6 +688,7 @@ function Dashboard() {
 
 
         {/* STATS */}
+
         <section className="dashboard-stats">
 
           <div className="stat-card">
@@ -701,6 +796,7 @@ function Dashboard() {
 
 
         {/* APPLICATION SECTION */}
+
         <section className="applications-section">
 
           <div className="section-top">
@@ -715,8 +811,18 @@ function Dashboard() {
                 Keep track of your latest job applications.
               </p>
 
-            </div>
+              {error && (
+                <p
+                  style={{
+                    color: "red",
+                    marginTop: "10px",
+                  }}
+                >
+                  {error}
+                </p>
+              )}
 
+            </div>
 
             <button
               className="add-job-btn"
@@ -724,6 +830,7 @@ function Dashboard() {
                 resetForm();
                 setShowForm(true);
               }}
+              disabled={saving}
             >
               + Add Application
             </button>
@@ -742,7 +849,6 @@ function Dashboard() {
                   ? "Edit Application"
                   : "Add New Application"}
               </h2>
-
 
               <form
                 onSubmit={
@@ -767,6 +873,7 @@ function Dashboard() {
                         e.target.value
                       )
                     }
+                    disabled={saving}
                   />
 
                 </div>
@@ -787,6 +894,7 @@ function Dashboard() {
                         e.target.value
                       )
                     }
+                    disabled={saving}
                   />
 
                 </div>
@@ -806,6 +914,12 @@ function Dashboard() {
                         e.target.value
                       )
                     }
+                    max={
+                      new Date()
+                        .toISOString()
+                        .split("T")[0]
+                    }
+                    disabled={saving}
                   />
 
                 </div>
@@ -824,6 +938,7 @@ function Dashboard() {
                         e.target.value
                       )
                     }
+                    disabled={saving}
                   >
 
                     <option value="Applied">
@@ -853,6 +968,7 @@ function Dashboard() {
                     type="button"
                     className="cancel-btn"
                     onClick={resetForm}
+                    disabled={saving}
                   >
                     Cancel
                   </button>
@@ -860,8 +976,13 @@ function Dashboard() {
                   <button
                     type="submit"
                     className="save-btn"
+                    disabled={saving}
                   >
-                    {editingId
+                    {saving
+                      ? editingId
+                        ? "Updating..."
+                        : "Saving..."
+                      : editingId
                       ? "Update Application"
                       : "Save Application"}
                   </button>
@@ -904,82 +1025,95 @@ function Dashboard() {
             </div>
 
 
-            {applications.map(
-              (application) => (
+            {applications.length === 0 && !error ? (
+              <div
+                style={{
+                  padding: "30px",
+                  textAlign: "center",
+                }}
+              >
+                No applications found.
+              </div>
+            ) : (
+              applications.map(
+                (application) => (
 
-                <div
-                  className="table-row"
-                  key={application.id}
-                >
+                  <div
+                    className="table-row"
+                    key={application.id}
+                  >
 
-                  <div className="company">
+                    <div className="company">
 
-                    <div className="table-company-icon">
+                      <div className="table-company-icon">
 
-                      {application.company
-                        .charAt(0)
-                        .toUpperCase()}
+                        {application.company
+                          .charAt(0)
+                          .toUpperCase()}
+
+                      </div>
+
+                      <strong>
+                        {application.company}
+                      </strong>
 
                     </div>
 
-                    <strong>
-                      {application.company}
-                    </strong>
+
+                    <span>
+                      {application.position}
+                    </span>
+
+
+                    <span>
+                      {formatDate(
+                        application.date_applied ||
+                          application.date
+                      )}
+                    </span>
+
+
+                    <span
+                      className={`table-status ${application.status.toLowerCase()}`}
+                    >
+                      {application.status}
+                    </span>
+
+
+                    <div className="action-buttons">
+
+                      <button
+                        className="edit-btn"
+                        onClick={() =>
+                          handleEditApplication(
+                            application
+                          )
+                        }
+                        title="Edit application"
+                        disabled={saving}
+                      >
+                        ✏️
+                      </button>
+
+
+                      <button
+                        className="action-btn"
+                        onClick={() =>
+                          handleDeleteApplication(
+                            application.id
+                          )
+                        }
+                        title="Delete application"
+                        disabled={saving}
+                      >
+                        🗑️
+                      </button>
+
+                    </div>
 
                   </div>
 
-
-                  <span>
-                    {application.position}
-                  </span>
-
-
-                  <span>
-                    {formatDate(
-                      application.date_applied ||
-                        application.date
-                    )}
-                  </span>
-
-
-                  <span
-                    className={`table-status ${application.status.toLowerCase()}`}
-                  >
-                    {application.status}
-                  </span>
-
-
-                  <div className="action-buttons">
-
-                    <button
-                      className="edit-btn"
-                      onClick={() =>
-                        handleEditApplication(
-                          application
-                        )
-                      }
-                      title="Edit application"
-                    >
-                      ✏️
-                    </button>
-
-
-                    <button
-                      className="action-btn"
-                      onClick={() =>
-                        handleDeleteApplication(
-                          application.id
-                        )
-                      }
-                      title="Delete application"
-                    >
-                      🗑️
-                    </button>
-
-                  </div>
-
-                </div>
-
+                )
               )
             )}
 

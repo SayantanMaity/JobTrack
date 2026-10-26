@@ -9,7 +9,6 @@ function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-
   // ===============================
   // LOGIN
   // ===============================
@@ -19,10 +18,26 @@ function Login() {
 
     setError("");
 
-    if (!email || !password) {
-      setError(
-        "Please enter your email and password."
-      );
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Required field validation
+    if (!cleanEmail || !password) {
+      setError("Please enter your email and password.");
+      return;
+    }
+
+    // Email validation
+    const emailPattern =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(cleanEmail)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    // Password validation
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
       return;
     }
 
@@ -39,7 +54,7 @@ function Login() {
           },
 
           body: JSON.stringify({
-            email,
+            email: cleanEmail,
             password,
           }),
         }
@@ -47,10 +62,19 @@ function Login() {
 
       const data = await response.json();
 
+      // Backend returned an error
       if (!response.ok) {
         setError(
           data.message ||
             "Invalid email or password."
+        );
+        return;
+      }
+
+      // Make sure token exists
+      if (!data.token || !data.user) {
+        setError(
+          "Login response is incomplete. Please try again."
         );
         return;
       }
@@ -87,6 +111,10 @@ function Login() {
         JSON.stringify(data.user)
       );
 
+      // ===============================
+      // GO TO DASHBOARD
+      // ===============================
+
       navigate("/dashboard");
 
     } catch (error) {
@@ -104,7 +132,6 @@ function Login() {
     }
   };
 
-
   return (
     <div className="auth-page">
 
@@ -120,23 +147,19 @@ function Login() {
 
         </div>
 
-
         <h1>
           Welcome back
         </h1>
 
-
         <p className="auth-subtitle">
           Log in to continue managing your job search.
         </p>
-
 
         {error && (
           <div className="auth-error">
             {error}
           </div>
         )}
-
 
         <form onSubmit={handleLogin}>
 
@@ -155,10 +178,10 @@ function Login() {
               onChange={(e) =>
                 setEmail(e.target.value)
               }
+              disabled={loading}
             />
 
           </div>
-
 
           {/* PASSWORD */}
 
@@ -175,10 +198,10 @@ function Login() {
               onChange={(e) =>
                 setPassword(e.target.value)
               }
+              disabled={loading}
             />
 
           </div>
-
 
           {/* REMEMBER / FORGOT */}
 
@@ -188,19 +211,18 @@ function Login() {
 
               <input
                 type="checkbox"
+                disabled={loading}
               />
 
               Remember me
 
             </label>
 
-
             <a href="#">
               Forgot password?
             </a>
 
           </div>
-
 
           {/* LOGIN BUTTON */}
 
@@ -216,7 +238,6 @@ function Login() {
 
         </form>
 
-
         <p className="auth-switch">
 
           Don't have an account?
@@ -226,7 +247,6 @@ function Login() {
           </a>
 
         </p>
-
 
         <a
           className="back-home"

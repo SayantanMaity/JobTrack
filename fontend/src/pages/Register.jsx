@@ -9,50 +9,94 @@ function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
 
     setError("");
 
-    if (!name || !email || !password || !confirmPassword) {
+    const cleanName = name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Required field validation
+    if (
+      !cleanName ||
+      !cleanEmail ||
+      !password ||
+      !confirmPassword
+    ) {
       setError("Please fill in all fields.");
       return;
     }
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+    // Name validation
+    if (cleanName.length < 2) {
+      setError("Name must be at least 2 characters.");
       return;
     }
 
+    // Email validation
+    const emailPattern =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(cleanEmail)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    // Password validation
     if (password.length < 6) {
       setError("Password must be at least 6 characters.");
       return;
     }
 
-    const existingUser = JSON.parse(
-      localStorage.getItem("jobtrackUser")
-    );
-
-    if (existingUser && existingUser.email === email) {
-      setError("An account with this email already exists.");
+    // Confirm password validation
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
       return;
     }
 
-    const user = {
-      name,
-      email,
-      password,
-    };
+    try {
+      setLoading(true);
 
-    localStorage.setItem(
-      "jobtrackUser",
-      JSON.stringify(user)
-    );
+      const response = await fetch(
+        "http://localhost:5000/api/register",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: cleanName,
+            email: cleanEmail,
+            password,
+          }),
+        }
+      );
 
-    alert("Account created successfully!");
+      const data = await response.json();
 
-    navigate("/login");
+      if (!response.ok) {
+        setError(
+          data.message ||
+            "Registration failed. Please try again."
+        );
+        return;
+      }
+
+      alert("Account created successfully!");
+
+      navigate("/login");
+    } catch (error) {
+      console.error("Registration error:", error);
+
+      setError(
+        "Unable to connect to the server. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -86,6 +130,7 @@ function Register() {
               placeholder="Your full name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              disabled={loading}
             />
           </div>
 
@@ -97,6 +142,7 @@ function Register() {
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
             />
           </div>
 
@@ -108,6 +154,7 @@ function Register() {
               placeholder="Create a password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
             />
           </div>
 
@@ -121,14 +168,18 @@ function Register() {
               onChange={(e) =>
                 setConfirmPassword(e.target.value)
               }
+              disabled={loading}
             />
           </div>
 
           <button
             type="submit"
             className="auth-btn"
+            disabled={loading}
           >
-            Create Account
+            {loading
+              ? "Creating Account..."
+              : "Create Account"}
           </button>
 
         </form>
